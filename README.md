@@ -49,12 +49,24 @@ Requires JDK 17+ and the Android SDK (platform 35).
 ./gradlew assembleRelease       # → app/build/outputs/apk/release/app-release.apk
 ```
 
-The release build is signed with the debug key so it installs directly for personal use.
-Use your own signing config before distributing it.
+Without a signing key, release builds use the debug key, which is fine for your own phone.
+To publish builds for others, set up your own key and use GitHub releases (see
+[SECURITY.md](SECURITY.md)).
+
+## Safety
+
+ScrollStop has **no internet permission and no other permissions**. It never reads text on
+screen, and its only action is pressing Back. The build fails if that ever changes. See
+[SECURITY.md](SECURITY.md) for the full list and how to check a downloaded APK.
 
 ## Install and set up
 
-1. Copy `app-release.apk` to your phone and open it (allow installs from that source when asked).
+1. Install the APK. Play Protect blocks any sideloaded app that asks for Accessibility,
+   however safe it is ("This app can request access to sensitive data…"). Either:
+   - **Recommended:** install from a computer with `adb install ScrollStop.apk`
+     (turn on Developer options → USB debugging first), or
+   - briefly turn off Play Store → profile → Play Protect → ⚙ → *Scan apps with Play Protect*,
+     install, then turn it back on.
 2. Open ScrollStop and tap **Open Accessibility settings** → *ScrollStop pause* → turn it on.
    - On Android 13+ the switch may be greyed out for sideloaded apps. Go to
      **Settings → Apps → ScrollStop → ⋮ → Allow restricted settings**, then try again.
