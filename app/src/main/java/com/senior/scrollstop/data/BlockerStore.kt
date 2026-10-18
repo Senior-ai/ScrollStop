@@ -14,6 +14,11 @@ class BlockerStore(context: Context) {
         get() = prefs.getStringSet(KEY_GUARDED, emptySet())!!.toSet()
         set(value) = prefs.edit().putStringSet(KEY_GUARDED, value).apply()
 
+    /** Reels/Shorts-style feeds to guard. On by default: they're the main reason to install this. */
+    var enabledFeatures: Set<String>
+        get() = prefs.getStringSet(KEY_FEATURES, ShortFormFeatures.ALL_KEYS)!!.toSet()
+        set(value) = prefs.edit().putStringSet(KEY_FEATURES, value).apply()
+
     var basePauseSeconds: Int
         get() = prefs.getInt(KEY_PAUSE, DEFAULT_PAUSE_SECONDS)
         set(value) = prefs.edit().putInt(KEY_PAUSE, value).apply()
@@ -24,6 +29,10 @@ class BlockerStore(context: Context) {
 
     fun setGuarded(pkg: String, guarded: Boolean) {
         guardedPackages = if (guarded) guardedPackages + pkg else guardedPackages - pkg
+    }
+
+    fun setFeatureEnabled(key: String, enabled: Boolean) {
+        enabledFeatures = if (enabled) enabledFeatures + key else enabledFeatures - key
     }
 
     fun allowedUntil(pkg: String): Long = prefs.getLong(KEY_ALLOW + pkg, 0L)
@@ -86,6 +95,7 @@ class BlockerStore(context: Context) {
     companion object {
         const val DEFAULT_PAUSE_SECONDS = 6
         private const val KEY_GUARDED = "guarded"
+        private const val KEY_FEATURES = "features"
         private const val KEY_PAUSE = "pause_seconds"
         private const val KEY_PROGRESSIVE = "progressive"
         private const val KEY_DAY = "stats_day"

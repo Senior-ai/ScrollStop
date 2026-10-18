@@ -2,6 +2,9 @@ package com.senior.scrollstop.ui
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
@@ -44,15 +47,35 @@ import androidx.compose.ui.unit.dp
 import com.senior.scrollstop.data.BlockerStore
 import com.senior.scrollstop.data.InstalledApps
 import com.senior.scrollstop.data.PauseRules
+import com.senior.scrollstop.data.ShortFormFeatures
+import com.senior.scrollstop.service.BlockerAccessibilityService
 import kotlinx.coroutines.delay
 
-/** The pause screen shown on top of a guarded app. */
+/** The pause screen shown on top of a guarded app or a guarded Reels/Shorts feed. */
 class InterceptActivity : ComponentActivity() {
 
-    private data class Request(val pkg: String, val label: String, val attempts: Int, val timesUp: Boolean, val nonce: Long)
+    /** [key] is an app package name or a [ShortFormFeatures] key. */
+    private data class Request(
+        val key: String,
+        val label: String,
+        val isFeature: Boolean,
+        val attempts: Int,
+        val timesUp: Boolean,
+        val nonce: Long,
+    )
 
     private lateinit var store: BlockerStore
     private var request by mutableStateOf<Request?>(null)
+
+    /** Taking audio focus pauses the Reel or Short playing behind the pause screen. */
+    private val audioFocus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+        .setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build(),
+        )
+        .build()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,7 +86,7 @@ class InterceptActivity : ComponentActivity() {
             finish()
             return
         }
-        onBackPressedDispatcher.addCallback(this) { goHome() }
+        onBackPressedDispatcher.addCallback(this) { request?.let(::leave) ?: finish() }
 
         setContent {
             ScrollStopTheme {
@@ -71,14 +94,12 @@ class InterceptActivity : ComponentActivity() {
                     key(r.nonce) {
                         InterceptScreen(
                             label = r.label,
+                            isFeature = r.isFeature,
                             attempts = r.attempts,
                             timesUp = r.timesUp,
                             pauseSeconds = PauseRules.pauseSeconds(store.basePauseSeconds, store.progressivePause, r.attempts),
-                            onLeave = {
-                                store.recordResisted(r.pkg)
-                                goHome()
-                            },
-                            onAllow = { minutes -> openTarget(r.pkg, minutes) },
+                            onLeave = { leave(r) },
+                            onAllow = { minutes -> allow(r, minutes) },
                         )
                     }
                 }
@@ -92,28 +113,52 @@ class InterceptActivity : ComponentActivity() {
         parse(intent)?.let { request = it }
     }
 
+    override fun onStart() {
+        super.onStart()
+        isShowing = true
+        getSystemService(AudioManager::class.java).requestAudioFocus(audioFocus)
+    }
+
     override fun onStop() {
         super.onStop()
+        isShowing = false
+        getSystemService(AudioManager::class.java).abandonAudioFocusRequest(audioFocus)
         // Never leave a stale pause screen behind; the service brings a fresh one when needed.
         if (!isChangingConfigurations) finish()
     }
 
     private fun parse(intent: Intent): Request? {
-        val pkg = intent.getStringExtra(EXTRA_PACKAGE) ?: return null
+        val key = intent.getStringExtra(EXTRA_KEY) ?: return null
+        val feature = ShortFormFeatures.byKey(key)
         return Request(
-            pkg = pkg,
-            label = InstalledApps.label(this, pkg),
+            key = key,
+            label = feature?.label ?: InstalledApps.label(this, key),
+            isFeature = feature != null,
             attempts = intent.getIntExtra(EXTRA_ATTEMPTS, 1),
             timesUp = intent.getBooleanExtra(EXTRA_TIMES_UP, false),
             nonce = System.nanoTime(),
         )
     }
 
-    private fun openTarget(pkg: String, minutes: Int) {
-        store.allow(pkg, System.currentTimeMillis() + minutes * 60_000L)
-        packageManager.getLaunchIntentForPackage(pkg)?.let {
-            startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    private fun leave(r: Request) {
+        store.recordResisted(r.key)
+        if (r.isFeature) {
+            // Stay in the app, just back out of the feed.
+            BlockerAccessibilityService.instance?.ejectFrom(r.key)
+            finish()
+        } else {
+            goHome()
         }
+    }
+
+    private fun allow(r: Request, minutes: Int) {
+        store.allow(r.key, System.currentTimeMillis() + minutes * 60_000L)
+        if (!r.isFeature) {
+            packageManager.getLaunchIntentForPackage(r.key)?.let {
+                startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+        // For a feature, closing this screen reveals the feed exactly where it was.
         finish()
     }
 
@@ -127,13 +172,18 @@ class InterceptActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val EXTRA_PACKAGE = "package"
+        private const val EXTRA_KEY = "key"
         private const val EXTRA_ATTEMPTS = "attempts"
         private const val EXTRA_TIMES_UP = "times_up"
 
-        fun intent(context: Context, pkg: String, attempts: Int, timesUp: Boolean): Intent =
+        /** True while the pause screen is visible, so the service doesn't scan the app behind it. */
+        @Volatile
+        var isShowing = false
+            private set
+
+        fun intent(context: Context, key: String, attempts: Int, timesUp: Boolean): Intent =
             Intent(context, InterceptActivity::class.java)
-                .putExtra(EXTRA_PACKAGE, pkg)
+                .putExtra(EXTRA_KEY, key)
                 .putExtra(EXTRA_ATTEMPTS, attempts)
                 .putExtra(EXTRA_TIMES_UP, timesUp)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
@@ -145,6 +195,7 @@ private enum class Phase { TimesUp, Breathing, Choice }
 @Composable
 private fun InterceptScreen(
     label: String,
+    isFeature: Boolean,
     attempts: Int,
     timesUp: Boolean,
     pauseSeconds: Int,
@@ -162,9 +213,9 @@ private fun InterceptScreen(
         contentAlignment = Alignment.Center,
     ) {
         when (phase) {
-            Phase.TimesUp -> TimesUp(label, onLeave = onLeave, onMore = { phase = Phase.Breathing })
+            Phase.TimesUp -> TimesUp(label, isFeature, onLeave = onLeave, onMore = { phase = Phase.Breathing })
             Phase.Breathing -> Breathing(pauseSeconds, onDone = { phase = Phase.Choice })
-            Phase.Choice -> Choice(label, attempts, onLeave, onAllow)
+            Phase.Choice -> Choice(label, isFeature, attempts, onLeave, onAllow)
         }
     }
 }
@@ -211,7 +262,7 @@ private fun Breathing(seconds: Int, onDone: () -> Unit) {
 }
 
 @Composable
-private fun Choice(label: String, attempts: Int, onLeave: () -> Unit, onAllow: (Int) -> Unit) {
+private fun Choice(label: String, isFeature: Boolean, attempts: Int, onLeave: () -> Unit, onAllow: (Int) -> Unit) {
     Column(
         Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -224,17 +275,17 @@ private fun Choice(label: String, attempts: Int, onLeave: () -> Unit, onAllow: (
             textAlign = TextAlign.Center,
         )
         Text(
-            "Do you still want to open it?",
+            if (isFeature) "Do you really want to start scrolling?" else "Do you still want to open it?",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onLeave, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            Text("No, I don't want to open $label")
+            Text(if (isFeature) "No, take me out of $label" else "No, I don't want to open $label")
         }
         Spacer(Modifier.height(8.dp))
-        Text("Or open it for", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(if (isFeature) "Or watch for" else "Or open it for", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PauseRules.ALLOWANCE_MINUTES.forEach { minutes ->
                 OutlinedButton(onClick = { onAllow(minutes) }) { Text("$minutes min") }
@@ -244,7 +295,7 @@ private fun Choice(label: String, attempts: Int, onLeave: () -> Unit, onAllow: (
 }
 
 @Composable
-private fun TimesUp(label: String, onLeave: () -> Unit, onMore: () -> Unit) {
+private fun TimesUp(label: String, isFeature: Boolean, onLeave: () -> Unit, onMore: () -> Unit) {
     Column(
         Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -263,7 +314,7 @@ private fun TimesUp(label: String, onLeave: () -> Unit, onMore: () -> Unit) {
         )
         Spacer(Modifier.height(16.dp))
         Button(onClick = onLeave, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            Text("Close $label")
+            Text(if (isFeature) "Leave $label" else "Close $label")
         }
         TextButton(onClick = onMore) { Text("I need a bit more time") }
     }

@@ -52,6 +52,7 @@ import com.senior.scrollstop.data.AppInfo
 import com.senior.scrollstop.data.BlockerStore
 import com.senior.scrollstop.data.InstalledApps
 import com.senior.scrollstop.data.PauseRules
+import com.senior.scrollstop.data.ShortFormFeatures
 import com.senior.scrollstop.service.BlockerAccessibilityService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -111,10 +112,15 @@ private fun MainScreen(store: BlockerStore) {
             )
         }
         if (!serviceEnabled) item { PermissionCard() }
-        item { StatsCard(totals, guarded.isEmpty()) }
+        item { FeaturesCard(store) }
+        item { StatsCard(totals) }
         item { SettingsCard(store) }
         item {
-            Text("Apps to guard", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp))
+            Text("Whole apps to guard", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp))
+            Text(
+                "Pause before opening the app at all. Good for apps that are all feed, like TikTok.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -146,8 +152,8 @@ private fun PermissionCard() {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Turn on ScrollStop", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                "ScrollStop needs Accessibility access to notice when you open a guarded app. " +
-                    "It only looks at which app is open, never at what's on screen.",
+                "ScrollStop needs Accessibility access to notice when you open a guarded app or " +
+                    "start Reels or Shorts. It never reads what you type or see, and nothing leaves your phone.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Button(onClick = { context.startActivity(BlockerAccessibilityService.settingsIntent()) }) {
@@ -171,18 +177,44 @@ private fun PermissionCard() {
 }
 
 @Composable
-private fun StatsCard(totals: BlockerStore.DailyTotals, nothingGuarded: Boolean) {
+private fun FeaturesCard(store: BlockerStore) {
+    var enabled by remember { mutableStateOf(store.enabledFeatures) }
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Reels & Shorts", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Pause only the endless video feed. Messages, search and the rest of the app keep working. " +
+                    "Say no and ScrollStop backs you out of the feed.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ShortFormFeatures.ALL.forEach { feature ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            store.setFeatureEnabled(feature.key, feature.key !in enabled)
+                            enabled = store.enabledFeatures
+                        }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(feature.label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                    Switch(checked = feature.key in enabled, onCheckedChange = { on ->
+                        store.setFeatureEnabled(feature.key, on)
+                        enabled = store.enabledFeatures
+                    })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatsCard(totals: BlockerStore.DailyTotals) {
     Card {
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             Stat("${totals.attempts}", "pauses today")
             Stat("${totals.resisted}", "times you walked away")
-        }
-        if (nothingGuarded) {
-            Text(
-                "Pick a few apps below to get started.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-            )
         }
     }
 }

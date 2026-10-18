@@ -1,11 +1,17 @@
 # ScrollStop
 
-A small Android app in the spirit of *one sec*: when you open an app you've chosen to guard
-(Instagram, TikTok, YouTube, …), ScrollStop shows a short breathing pause first and asks
-whether you really want to go in. Often the answer is no.
+A small Android app in the spirit of *one sec*, focused on the worst doom-scroll traps:
+**Instagram Reels** and **YouTube Shorts**. When you start one, ScrollStop shows a short breathing
+pause and asks whether you really want to scroll. Say no and it backs you out of the feed,
+and you keep using the rest of the app (DMs, search, subscriptions) as normal.
+
+It can also guard whole apps (TikTok, Reddit, …) with the same pause.
 
 ## What it does
 
+- **Reels & Shorts guard** (on by default): pauses only the short-video feed, not the whole app.
+  Choosing "No" presses Back for you until you're out of the feed. The video behind the pause
+  screen is paused while you decide.
 - **Breathing pause** before every guarded app (3–20 s, your choice).
 - **Gets longer each time**: optionally +2 s for every repeat open of the same app that day (capped at 30 s).
 - **Honest counter**: "You've tried to open Instagram 7 times today."
@@ -15,11 +21,20 @@ whether you really want to go in. Often the answer is no.
 
 Everything stays on the phone. There is no network permission, account or tracking.
 
+### How Reels/Shorts detection works
+
+Inside Instagram and YouTube, ScrollStop checks the screen's layout for the full-screen Reels or
+Shorts player by its view ID (for example `clips_viewer_view_pager` and `reel_recycler`). It
+doesn't read any text. If an app update renames those views, the pause stops appearing for that
+feed. Add the new ID to `ShortFormFeatures.kt` and rebuild. You can find it with Android Studio's
+Layout Inspector, or with `adb shell uiautomator dump`.
+
 ## How it works
 
 | Piece | File |
 |---|---|
-| Detects which app is in the foreground (window events only; it never reads screen content) | `service/BlockerAccessibilityService.kt` |
+| Detects the foreground app, and the Reels/Shorts player inside Instagram/YouTube | `service/BlockerAccessibilityService.kt` |
+| Which view IDs mark the Reels and Shorts players | `data/ShortFormFeatures.kt` |
 | Pause, choice and time's-up screens (Jetpack Compose) | `ui/InterceptActivity.kt` |
 | Setup screen: permission, stats, settings, app picker | `ui/MainActivity.kt` |
 | Pure decision logic (unit tested) | `data/PauseRules.kt` |
@@ -43,12 +58,15 @@ Use your own signing config before distributing it.
 2. Open ScrollStop and tap **Open Accessibility settings** → *ScrollStop pause* → turn it on.
    - On Android 13+ the switch may be greyed out for sideloaded apps. Go to
      **Settings → Apps → ScrollStop → ⋮ → Allow restricted settings**, then try again.
-3. Switch on the apps you want to guard.
+3. Reels and Shorts are guarded straight away. Optionally switch on whole apps to guard too.
+   - Updating from an older version? Turn the accessibility service off and on once, so
+     Android picks up the new permission to look for the Reels/Shorts player.
 4. Optional: some phones (Xiaomi, Samsung, Huawei…) kill background services aggressively.
    If the pause stops appearing, set ScrollStop's battery usage to **Unrestricted**.
 
 ## Ideas for later
 
+- More feeds: Facebook Reels, Snapchat Spotlight, YouTube's Shorts shelf on the home screen
 - Daily hard limits ("max 3 opens of TikTok per day")
 - Schedules (stronger pauses during work hours or after 23:00)
 - Home-screen widget with today's stats
