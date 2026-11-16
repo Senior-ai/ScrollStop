@@ -33,8 +33,8 @@ android {
         applicationId = "com.senior.scrollstop"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     signingConfigs {
@@ -66,7 +66,15 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
+
+val robolectricAndroid: Configuration by configurations.creating
+
+/** Android 15 image matching Robolectric 4.14.1; tests run against API 35, the target SDK. */
+val ROBOLECTRIC_ANDROID = "15-robolectric-12650502-i7"
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
@@ -82,6 +90,25 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core:1.6.1")
+    robolectricAndroid("org.robolectric:android-all-instrumented:$ROBOLECTRIC_ANDROID")
+}
+
+/**
+ * Robolectric normally downloads its Android image while tests run, outside Gradle (no proxy,
+ * no cache). Resolve it through Gradle instead and run Robolectric offline.
+ */
+tasks.withType<Test>().configureEach {
+    val images = robolectricAndroid
+    val dir = layout.buildDirectory.dir("robolectric-android").get().asFile
+    inputs.files(images)
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", dir.absolutePath)
+    doFirst {
+        dir.mkdirs()
+        images.forEach { it.copyTo(File(dir, it.name), overwrite = true) }
+    }
 }
 
 /**

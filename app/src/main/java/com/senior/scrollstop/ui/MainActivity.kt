@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.senior.scrollstop.CrashLog
 import com.senior.scrollstop.data.AppInfo
 import com.senior.scrollstop.data.BlockerStore
 import com.senior.scrollstop.data.InstalledApps
@@ -62,6 +63,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val crash = CrashLog.read(this)
+        if (crash != null) {
+            setContentView(crashReportView(this, crash, onDismiss = ::showMain))
+        } else {
+            showMain()
+        }
+    }
+
+    private fun showMain() {
         val store = BlockerStore(this)
         setContent { ScrollStopTheme { MainScreen(store) } }
     }

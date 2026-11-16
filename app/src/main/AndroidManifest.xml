@@ -18,6 +18,7 @@
     </queries>
 
     <application
+        android:name=".ScrollStopApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
