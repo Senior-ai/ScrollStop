@@ -12,9 +12,13 @@ data class ShortFormFeature(
     val label: String,
     val packageName: String,
     val playerViewIds: List<String>,
+    /** The app's own Home tab, tapped to leave the feed when Back doesn't. Empty if unknown. */
+    val homeTabViewIds: List<String> = emptyList(),
 ) {
     /** IDs in the form the accessibility API expects: `package:id/name`. */
     val fullViewIds: List<String> get() = playerViewIds.map { "$packageName:id/$it" }
+
+    val fullHomeTabViewIds: List<String> get() = homeTabViewIds.map { "$packageName:id/$it" }
 }
 
 object ShortFormFeatures {
@@ -26,11 +30,12 @@ object ShortFormFeatures {
         key = KEY_PREFIX + "instagram_reels",
         label = "Instagram Reels",
         packageName = "com.instagram.android",
+        // Only IDs of the full-screen Reels viewer; video IDs can also appear on Reels posts in the feed.
         playerViewIds = listOf(
             "clips_viewer_view_pager",
             "clips_viewer_container",
-            "clips_video_container",
         ),
+        homeTabViewIds = listOf("feed_tab"),
     )
 
     val YOUTUBE_SHORTS = ShortFormFeature(

@@ -26,7 +26,7 @@ class ShortFormFeaturesTest {
 
     @Test
     fun ignoresRestOfTheApp() {
-        val onScreen = setOf("com.instagram.android:id/direct_inbox")
+        val onScreen = setOf("com.instagram.android:id/direct_inbox", "com.instagram.android:id/clips_video_container")
         assertNull(ShortFormFeatures.detect("com.instagram.android", all) { it in onScreen })
     }
 

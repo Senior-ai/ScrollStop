@@ -9,8 +9,11 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.InputMethodManager
 import com.senior.scrollstop.data.BlockerStore
+import com.senior.scrollstop.data.EjectAction
+import com.senior.scrollstop.data.EjectPlan
 import com.senior.scrollstop.data.PauseRules
 import com.senior.scrollstop.data.ShortFormFeature
 import com.senior.scrollstop.data.ShortFormFeatures
@@ -41,7 +44,12 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     /** Feature we're currently backing the user out of after they chose not to watch. */
     private var ejectingFrom: ShortFormFeature? = null
-    private var ejectSteps = 0
+    private var ejectActions = 0
+    private var ejectWaits = 0
+
+    /** After the user declines a feed, ignore it briefly so the exit animation can't re-trigger a pause. */
+    private var quietFeatureKey: String? = null
+    private var quietUntil = 0L
 
     private val expiryCheck = Runnable { checkForeground(timesUp = true) }
     private val featureExpiryCheck = Runnable { scanForFeature(force = true) }
@@ -108,6 +116,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
         val feature = detectFeature(pkg, enabled) ?: return
         if (feature == ejectingFrom) return
+        if (feature.key == quietFeatureKey && elapsed < quietUntil) return
 
         val now = System.currentTimeMillis()
         val allowedUntil = store.allowedUntil(feature.key)
@@ -143,32 +152,53 @@ class BlockerAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Called when the user declines a feature: press Back until its player is gone, which lands
-     * them on the app's normal screens (feed, DMs, search) instead of closing the whole app.
+     * Called when the user declines a feature: get them out of the feed while keeping them in the
+     * app where possible. Escalates Back → the app's Home tab → the phone's home screen, checking
+     * after each step, so "No" always ends outside the feed (see [EjectPlan]).
      */
     fun ejectFrom(featureKey: String) {
         ejectingFrom = ShortFormFeatures.byKey(featureKey) ?: return
-        ejectSteps = 0
+        ejectActions = 0
+        ejectWaits = 0
         handler.removeCallbacks(ejectStep)
         handler.postDelayed(ejectStep, EJECT_STEP_MS)
     }
 
     private fun continueEject() {
         val feature = ejectingFrom ?: return
-        if (ejectSteps++ >= MAX_EJECT_STEPS) {
-            ejectingFrom = null
-            return
-        }
-        val inApp = rootInActiveWindow?.packageName?.toString() == feature.packageName
-        if (inApp) {
-            if (detectFeature(feature.packageName, setOf(feature.key)) == null) {
+        val root = rootInActiveWindow
+        val inFront = root?.packageName?.toString() == feature.packageName
+        val action = EjectPlan.next(
+            actionsTaken = ejectActions,
+            waits = ejectWaits,
+            appInFront = inFront,
+            feedOnScreen = inFront && detectFeature(feature.packageName, setOf(feature.key)) != null,
+            hasHomeTab = feature.homeTabViewIds.isNotEmpty(),
+        )
+        when (action) {
+            EjectAction.Wait -> ejectWaits++
+            EjectAction.Back -> performGlobalAction(GLOBAL_ACTION_BACK)
+            EjectAction.TapHomeTab -> if (root == null || !tapHomeTab(root, feature)) performGlobalAction(GLOBAL_ACTION_HOME)
+            EjectAction.GoHome -> performGlobalAction(GLOBAL_ACTION_HOME)
+            EjectAction.Done -> {
                 ejectingFrom = null
+                quietFeatureKey = feature.key
+                quietUntil = SystemClock.elapsedRealtime() + QUIET_AFTER_EJECT_MS
                 return
             }
-            performGlobalAction(GLOBAL_ACTION_BACK)
         }
-        // Not in the app yet means the pause screen is still closing; check again shortly.
+        if (action != EjectAction.Wait) ejectActions++
         handler.postDelayed(ejectStep, EJECT_STEP_MS)
+    }
+
+    /** Taps the app's own Home tab, found by view ID. Returns false if it isn't on screen. */
+    private fun tapHomeTab(root: AccessibilityNodeInfo, feature: ShortFormFeature): Boolean {
+        val tab = feature.fullHomeTabViewIds
+            .flatMap { root.findAccessibilityNodeInfosByViewId(it) }
+            .firstOrNull { it.isVisibleToUser } ?: return false
+        var node: AccessibilityNodeInfo? = tab
+        while (node != null && !node.isClickable) node = node.parent
+        return node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
     }
 
     /** System UI and keyboards fire window events on top of apps without the app actually changing. */
@@ -189,8 +219,8 @@ class BlockerAccessibilityService : AccessibilityService() {
     companion object {
         private const val DEBOUNCE_MS = 1_500L
         private const val FEATURE_SCAN_INTERVAL_MS = 400L
-        private const val EJECT_STEP_MS = 350L
-        private const val MAX_EJECT_STEPS = 6
+        private const val EJECT_STEP_MS = 450L
+        private const val QUIET_AFTER_EJECT_MS = 2_500L
 
         /** The running service, so the pause screen can ask it to back out of a feed. */
         var instance: BlockerAccessibilityService? = null

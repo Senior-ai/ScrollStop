@@ -10,7 +10,8 @@ It can also guard whole apps (TikTok, Reddit, …) with the same pause.
 ## What it does
 
 - **Reels & Shorts guard** (on by default): pauses only the short-video feed, not the whole app.
-  Choosing "No" presses Back for you until you're out of the feed. The video behind the pause
+  Choosing "No" gets you out of the feed: Back first, then Instagram's Home tab, then the
+  phone's home screen if you're somehow still in it. The video behind the pause
   screen is paused while you decide.
 - **Breathing pause** before every guarded app (3–20 s, your choice).
 - **Gets longer each time**: optionally +2 s for every repeat open of the same app that day (capped at 30 s).
@@ -56,7 +57,8 @@ To publish builds for others, set up your own key and use GitHub releases (see
 ## Safety
 
 ScrollStop has **no internet permission and no other permissions**. It never reads text on
-screen, and its only action is pressing Back. The build fails if that ever changes. See
+screen, and the only things it does are the steps that take you out of a feed after you say no.
+The build fails if a permission is ever added. See
 [SECURITY.md](SECURITY.md) for the full list and how to check a downloaded APK.
 
 ## Install and set up
