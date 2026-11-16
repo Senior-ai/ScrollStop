@@ -14,10 +14,13 @@ object InstalledApps {
         val pm = context.packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         return pm.queryIntentActivities(launcher, 0)
-            .map { it.activityInfo.applicationInfo }
+            .mapNotNull { it.activityInfo?.applicationInfo }
             .distinctBy { it.packageName }
             .filter { it.packageName != context.packageName }
-            .map { AppInfo(it.packageName, pm.getApplicationLabel(it).toString(), pm.getApplicationIcon(it)) }
+            .map {
+                val icon: Drawable? = pm.getApplicationIcon(it)
+                AppInfo(it.packageName, pm.getApplicationLabel(it).toString(), icon ?: pm.defaultActivityIcon)
+            }
     }
 
     fun label(context: Context, pkg: String): String = try {

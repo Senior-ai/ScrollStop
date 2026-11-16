@@ -33,8 +33,8 @@ android {
         applicationId = "com.senior.scrollstop"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     signingConfigs {
@@ -92,6 +92,8 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     robolectricAndroid("org.robolectric:android-all-instrumented:$ROBOLECTRIC_ANDROID")
 }
 
@@ -100,6 +102,8 @@ dependencies {
  * no cache). Resolve it through Gradle instead and run Robolectric offline.
  */
 tasks.withType<Test>().configureEach {
+    // Screenshots need the debug-only Compose test activity, and one run of them is enough.
+    if (name.contains("Release")) filter.excludeTestsMatching("*ScreenshotTest")
     val images = robolectricAndroid
     val dir = layout.buildDirectory.dir("robolectric-android").get().asFile
     inputs.files(images)

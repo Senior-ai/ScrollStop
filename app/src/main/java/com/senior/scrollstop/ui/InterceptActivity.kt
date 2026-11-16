@@ -190,10 +190,10 @@ class InterceptActivity : ComponentActivity() {
     }
 }
 
-private enum class Phase { TimesUp, Breathing, Choice }
+internal enum class Phase { TimesUp, Breathing, Choice }
 
 @Composable
-private fun InterceptScreen(
+internal fun InterceptScreen(
     label: String,
     isFeature: Boolean,
     attempts: Int,
@@ -201,8 +201,9 @@ private fun InterceptScreen(
     pauseSeconds: Int,
     onLeave: () -> Unit,
     onAllow: (minutes: Int) -> Unit,
+    startPhase: Phase? = null,
 ) {
-    var phase by remember { mutableStateOf(if (timesUp) Phase.TimesUp else Phase.Breathing) }
+    var phase by remember { mutableStateOf(startPhase ?: if (timesUp) Phase.TimesUp else Phase.Breathing) }
 
     Box(
         Modifier
