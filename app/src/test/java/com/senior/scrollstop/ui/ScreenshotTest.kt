@@ -60,7 +60,10 @@ class ScreenshotTest {
     fun pauseChoiceLight() = capturePause("pause-choice-light", Phase.Choice, "Instagram Reels", isFeature = true)
 
     @Test @Config(qualifiers = "+night")
-    fun pauseBreathingDark() = capturePause("pause-breathing-dark", Phase.Breathing, "TikTok", isFeature = false)
+    fun pauseBreathingDark() = capturePause("pause-breathing-dark", Phase.Breathing, "Instagram Reels", isFeature = true, atMs = 3_200)
+
+    @Test @Config(qualifiers = "+notnight")
+    fun pauseBreathingLight() = capturePause("pause-breathing-light", Phase.Breathing, "Instagram Reels", isFeature = true, atMs = 3_200)
 
     @Test @Config(qualifiers = "+night")
     fun pauseTimesUpDark() = capturePause("pause-timesup-dark", Phase.TimesUp, "YouTube Shorts", isFeature = true)
@@ -68,7 +71,9 @@ class ScreenshotTest {
     @Test @Config(qualifiers = "+notnight")
     fun pauseAppChoiceLight() = capturePause("pause-app-choice-light", Phase.Choice, "TikTok", isFeature = false)
 
-    private fun capturePause(name: String, phase: Phase, label: String, isFeature: Boolean) {
+    private fun capturePause(name: String, phase: Phase, label: String, isFeature: Boolean, atMs: Long = 1_500) {
+        // The tide drifts forever, so drive the clock by hand instead of waiting for idle.
+        compose.mainClock.autoAdvance = false
         compose.setContent {
             ScrollStopTheme {
                 InterceptScreen(
@@ -83,7 +88,8 @@ class ScreenshotTest {
                 )
             }
         }
-        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(atMs)
+        shadowOf(Looper.getMainLooper()).idle()
         save(name, compose.activity.window.decorView)
     }
 

@@ -85,3 +85,8 @@ The build fails if a permission is ever added. See
 - Schedules (stronger pauses during work hours or after 23:00)
 - Home-screen widget with today's stats
 - Guarding specific websites in the browser
+
+## Credits
+
+Headlines and numbers use [Fraunces](https://github.com/undercasetype/Fraunces) by Undercase
+Type, under the SIL Open Font License (see `third_party/fraunces/OFL.txt`).

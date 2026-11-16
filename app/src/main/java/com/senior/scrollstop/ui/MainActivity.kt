@@ -8,6 +8,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,8 +18,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,7 +30,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,7 +53,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -91,7 +88,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val GroupRadius = 24.dp
+/** Rounding for the few raised elements (setup block, search). Rows themselves are flat. */
+private val Raised = RoundedCornerShape(28.dp)
+private val Gutter = 24.dp
 
 @Composable
 private fun MainScreen(store: BlockerStore) {
@@ -125,168 +124,147 @@ private fun MainScreen(store: BlockerStore) {
 
     LazyColumn(
         Modifier.fillMaxSize().safeDrawingPadding(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 32.dp),
+        contentPadding = PaddingValues(top = 32.dp, bottom = 40.dp),
     ) {
-        item {
-            Text(
-                "ScrollStop",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 8.dp),
-            )
-            Text(
-                "A breath before the scroll.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 24.dp),
-            )
-        }
-
-        item { if (serviceEnabled) ActiveBanner() else SetupCard() }
-
-        item { Spacer(Modifier.height(12.dp)) }
-        item { StatsRow(totals) }
+        item { Header(totals, serviceEnabled) }
+        if (!serviceEnabled) item { SetupBlock() }
 
         section(
             "Reels & Shorts",
-            "Pause only the endless video feed. Messages, search and the rest of the app keep working.",
+            "Pauses only the video feed. Messages, search and everything else keep working.",
         )
         val featureList = ShortFormFeatures.ALL
         itemsIndexed(featureList, key = { _, f -> f.key }) { index, feature ->
-            GroupRow(index, featureList.size) {
-                SwitchRow(
-                    title = feature.label,
-                    subtitle = "Say no and ScrollStop backs you out of the feed",
-                    checked = feature.key in features,
-                ) { on ->
-                    store.setFeatureEnabled(feature.key, on)
-                    features = store.enabledFeatures
-                }
+            SwitchRow(feature.label, null, feature.key in features, divider = index < featureList.lastIndex) { on ->
+                store.setFeatureEnabled(feature.key, on)
+                features = store.enabledFeatures
             }
         }
 
-        section("Pause", null)
+        section("The pause", null)
         item { PauseSettings(store) }
 
-        section("Whole apps", "Pause before the app opens at all. Best for apps that are all feed, like TikTok.")
+        section("Whole apps", "Pauses before the app opens at all. Best for apps that are all feed, like TikTok.")
         item {
-            SearchField(query) { query = it }
-            Spacer(Modifier.height(8.dp))
+            SearchField(query, Modifier.padding(horizontal = Gutter - 8.dp, vertical = 4.dp)) { query = it }
         }
         if (apps == null) {
             item {
-                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             }
         }
         itemsIndexed(shown, key = { _, app -> app.packageName }) { index, app ->
-            GroupRow(index, shown.size) {
-                AppRow(app, checked = app.packageName in guarded) { on ->
-                    store.setGuarded(app.packageName, on)
-                    guarded = store.guardedPackages
-                }
+            AppRow(app, checked = app.packageName in guarded, divider = index < shown.lastIndex) { on ->
+                store.setGuarded(app.packageName, on)
+                guarded = store.guardedPackages
             }
         }
     }
 }
 
+/** The app name, then today in one sentence instead of a dashboard. */
+@Composable
+private fun Header(totals: BlockerStore.DailyTotals, serviceEnabled: Boolean) {
+    Column(Modifier.padding(horizontal = Gutter)) {
+        Text("ScrollStop", style = MaterialTheme.typography.headlineLarge)
+        Spacer(Modifier.height(20.dp))
+        Text(todaySentence(totals), style = MaterialTheme.typography.headlineSmall)
+        if (serviceEnabled) {
+            Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+                Text(
+                    "On and watching for Reels and Shorts",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(28.dp))
+    }
+}
+
+private fun todaySentence(t: BlockerStore.DailyTotals): String = when {
+    t.attempts == 0 -> "No pauses yet today."
+    t.resisted == 0 -> "Today you paused ${times(t.attempts)}."
+    else -> "Today you paused ${times(t.attempts)} and walked away ${times(t.resisted)}."
+}
+
+private fun times(n: Int) = if (n == 1) "once" else "$n times"
+
 private fun LazyListScope.section(title: String, description: String?) {
     item {
-        Column(Modifier.padding(start = 8.dp, end = 8.dp, top = 28.dp, bottom = 10.dp)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-            )
+        Column(Modifier.padding(start = Gutter, end = Gutter, top = 36.dp, bottom = 6.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge)
             if (description != null) {
                 Text(
                     description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
         }
     }
 }
 
-/** One row of a rounded group, One UI style: only the first and last rows get rounded corners. */
 @Composable
-private fun GroupRow(index: Int, count: Int, content: @Composable () -> Unit) {
-    val top = if (index == 0) GroupRadius else 0.dp
-    val bottom = if (index == count - 1) GroupRadius else 0.dp
-    val shape: Shape = RoundedCornerShape(top, top, bottom, bottom)
-    Column(Modifier.fillMaxWidth().clip(shape).background(MaterialTheme.colorScheme.surfaceContainer)) {
-        content()
-        if (index < count - 1) {
-            HorizontalDivider(
-                Modifier.padding(horizontal = 20.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-            )
-        }
-    }
+private fun Hairline() {
+    HorizontalDivider(Modifier.padding(horizontal = Gutter), color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 @Composable
-private fun Group(content: @Composable () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(GroupRadius))
-            .background(MaterialTheme.colorScheme.surfaceContainer),
-    ) { content() }
-}
-
-@Composable
-private fun SwitchRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchRow(title: String, subtitle: String?, checked: Boolean, divider: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .clickable { onChange(!checked) }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = Gutter, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f).padding(end = 12.dp)) {
+        Column(Modifier.weight(1f).padding(end = 16.dp)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             if (subtitle != null) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Switch(checked = checked, onCheckedChange = onChange)
     }
+    if (divider) Hairline()
 }
 
+/** The one raised block on the screen: setup is a real sequence, so the steps are numbered. */
 @Composable
-private fun SetupCard() {
+private fun SetupBlock() {
     val context = LocalContext.current
     val needsRestrictedStep = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     Column(
         Modifier
+            .padding(horizontal = Gutter - 8.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(GroupRadius))
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .clip(Raised)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        val onContainer = MaterialTheme.colorScheme.onPrimaryContainer
-        Text("Finish setup", style = MaterialTheme.typography.titleLarge, color = onContainer)
-        Text(
-            "ScrollStop uses Accessibility to notice when you open Reels, Shorts or a guarded app. " +
-                "It never reads what you type or see, and it has no internet access.",
-            color = onContainer,
-        )
+        Column {
+            Text("Two steps to switch it on", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "ScrollStop needs Accessibility to notice Reels and Shorts. It never reads what you type or see, " +
+                    "and it has no internet access.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
         var step = 1
         if (needsRestrictedStep) {
             SetupStep(
                 number = step++,
                 title = "Allow restricted settings",
-                detail = "Android blocks Accessibility for apps installed outside the Play Store until you allow it. " +
-                    "In App info, tap ⋮ (top right), then Allow restricted settings. This applies to ScrollStop only.",
+                detail = "In App info, tap ⋮ at the top right, then Allow restricted settings. This applies to ScrollStop only.",
                 action = "Open App info",
                 primary = false,
             ) {
@@ -298,7 +276,7 @@ private fun SetupCard() {
         SetupStep(
             number = step,
             title = "Turn on ScrollStop pause",
-            detail = "In Accessibility, open Installed apps → ScrollStop pause and switch it on.",
+            detail = "In Accessibility, open Installed apps, then ScrollStop pause.",
             action = "Open Accessibility",
             primary = true,
         ) { context.startActivity(BlockerAccessibilityService.settingsIntent()) }
@@ -307,70 +285,31 @@ private fun SetupCard() {
 
 @Composable
 private fun SetupStep(number: Int, title: String, detail: String, action: String, primary: Boolean, onClick: () -> Unit) {
-    val onContainer = MaterialTheme.colorScheme.onPrimaryContainer
     Row {
         Box(
-            Modifier.size(28.dp).clip(CircleShape).background(onContainer),
+            Modifier.size(32.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary),
             contentAlignment = Alignment.Center,
         ) {
-            Text("$number", color = MaterialTheme.colorScheme.primaryContainer, style = MaterialTheme.typography.labelLarge)
+            Text(
+                "$number",
+                color = MaterialTheme.colorScheme.onPrimary,
+                style = MaterialTheme.typography.titleMedium.copy(fontFamily = Fraunces),
+                fontWeight = FontWeight.SemiBold,
+            )
         }
-        Column(Modifier.padding(start = 14.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = onContainer)
-            Text(detail, style = MaterialTheme.typography.bodyMedium, color = onContainer.copy(alpha = 0.8f))
-            Spacer(Modifier.height(8.dp))
+        Column(Modifier.padding(start = 16.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(10.dp))
             if (primary) {
                 Button(onClick = onClick) { Text(action) }
             } else {
-                OutlinedButton(onClick = onClick) { Text(action, color = onContainer) }
+                OutlinedButton(
+                    onClick = onClick,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                ) { Text(action, color = MaterialTheme.colorScheme.onSurface) }
             }
         }
-    }
-}
-
-@Composable
-private fun ActiveBanner() {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(GroupRadius))
-            .background(MaterialTheme.colorScheme.secondaryContainer)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        Text(
-            "ScrollStop is on",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(start = 12.dp),
-        )
-    }
-}
-
-@Composable
-private fun StatsRow(totals: BlockerStore.DailyTotals) {
-    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        StatTile("${totals.attempts}", "pauses today", Modifier.weight(1f).fillMaxHeight())
-        StatTile("${totals.resisted}", "times you said no", Modifier.weight(1f).fillMaxHeight())
-    }
-}
-
-@Composable
-private fun StatTile(value: String, label: String, modifier: Modifier) {
-    Column(
-        modifier
-            .clip(RoundedCornerShape(GroupRadius))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(20.dp),
-    ) {
-        Text(
-            value,
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -378,74 +317,63 @@ private fun StatTile(value: String, label: String, modifier: Modifier) {
 private fun PauseSettings(store: BlockerStore) {
     var pause by remember { mutableFloatStateOf(store.basePauseSeconds.toFloat()) }
     var progressive by remember { mutableStateOf(store.progressivePause) }
-    Group {
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Breathing pause", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Text(
-                    "${pause.toInt()} seconds",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            Slider(
-                value = pause,
-                onValueChange = { pause = it },
-                onValueChangeFinished = { store.basePauseSeconds = pause.toInt() },
-                valueRange = PauseRules.MIN_PAUSE_SECONDS.toFloat()..20f,
-                steps = 20 - PauseRules.MIN_PAUSE_SECONDS - 1,
-            )
+    Column(Modifier.padding(start = Gutter, end = Gutter, top = 12.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("Breathe for", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            Text("${pause.toInt()} s", style = MaterialTheme.typography.headlineSmall)
         }
-        HorizontalDivider(
-            Modifier.padding(horizontal = 20.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        Slider(
+            value = pause,
+            onValueChange = { pause = it },
+            onValueChangeFinished = { store.basePauseSeconds = pause.toInt() },
+            valueRange = PauseRules.MIN_PAUSE_SECONDS.toFloat()..20f,
+            steps = 20 - PauseRules.MIN_PAUSE_SECONDS - 1,
         )
-        SwitchRow(
-            title = "Longer each time",
-            subtitle = "+${PauseRules.PROGRESSIVE_STEP_SECONDS} s for every repeat open of the same app today",
-            checked = progressive,
-        ) {
-            progressive = it
-            store.progressivePause = it
-        }
+    }
+    Hairline()
+    SwitchRow(
+        title = "Longer each time",
+        subtitle = "${PauseRules.PROGRESSIVE_STEP_SECONDS} more seconds each time you reopen the same thing today",
+        checked = progressive,
+        divider = false,
+    ) {
+        progressive = it
+        store.progressivePause = it
     }
 }
 
 @Composable
-private fun SearchField(query: String, onChange: (String) -> Unit) {
+private fun SearchField(query: String, modifier: Modifier, onChange: (String) -> Unit) {
     TextField(
         value = query,
         onValueChange = onChange,
         placeholder = { Text("Search apps") },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         singleLine = true,
-        shape = RoundedCornerShape(GroupRadius),
+        shape = Raised,
         colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
         ),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     )
 }
 
 @Composable
-private fun AppRow(app: AppInfo, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun AppRow(app: AppInfo, checked: Boolean, divider: Boolean, onCheckedChange: (Boolean) -> Unit) {
     val icon = remember(app.packageName) { app.icon.toBitmap(96, 96).asImageBitmap() }
     Row(
         Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = Gutter, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(icon, contentDescription = null, modifier = Modifier.size(40.dp))
-        Text(
-            app.label,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
-        )
+        Text(app.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f).padding(horizontal = 16.dp))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
+    if (divider) Hairline()
 }
