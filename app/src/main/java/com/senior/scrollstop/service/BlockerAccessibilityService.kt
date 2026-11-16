@@ -18,6 +18,7 @@ import com.senior.scrollstop.data.PauseRules
 import com.senior.scrollstop.data.ShortFormFeature
 import com.senior.scrollstop.data.ShortFormFeatures
 import com.senior.scrollstop.ui.InterceptActivity
+import com.senior.scrollstop.ui.PauseOverlay
 
 /**
  * Watches which app comes to the foreground. When it is a guarded app without an active
@@ -30,6 +31,7 @@ import com.senior.scrollstop.ui.InterceptActivity
 class BlockerAccessibilityService : AccessibilityService() {
 
     private lateinit var store: BlockerStore
+    private lateinit var overlay: PauseOverlay
     private val handler = Handler(Looper.getMainLooper())
 
     private var foregroundPackage: String? = null
@@ -57,6 +59,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         store = BlockerStore(this)
+        overlay = PauseOverlay(this)
         instance = this
     }
 
@@ -71,6 +74,12 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     private fun onWindowChanged(pkg: String) {
         if (isOverlayPackage(pkg)) return
+        if (::overlay.isInitialized && overlay.isShowing) {
+            // Our own overlay, or the app underneath redrawing: nothing changed for the user.
+            if (pkg == packageName || pkg == overlay.coveredPackage) return
+            // They left via Home or Recents with the pause still up; don't leave it floating.
+            overlay.hide()
+        }
         if (pkg == foregroundPackage) {
             // Same app, new screen (e.g. tapping the Reels tab).
             scanForFeature(force = true)
@@ -107,7 +116,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     private fun scanForFeature(force: Boolean) {
         val pkg = foregroundPackage ?: return
-        if (pkg !in ShortFormFeatures.PACKAGES || InterceptActivity.isShowing) return
+        if (pkg !in ShortFormFeatures.PACKAGES || InterceptActivity.isShowing || overlay.isShowing) return
         val enabled = store.enabledFeatures
         if (enabled.isEmpty()) return
         val elapsed = SystemClock.elapsedRealtime()
@@ -148,7 +157,43 @@ class BlockerAccessibilityService : AccessibilityService() {
         lastInterceptAt = elapsed
 
         val attempts = if (timesUp) store.attemptsToday(key) else store.recordAttempt(key)
-        startActivity(InterceptActivity.intent(this, key, attempts, timesUp))
+        val feature = ShortFormFeatures.byKey(key)
+        if (feature != null) {
+            showFeaturePause(feature, attempts, timesUp)
+        } else {
+            startActivity(InterceptActivity.intent(this, key, attempts, timesUp))
+        }
+    }
+
+    /**
+     * Reels/Shorts pause as an overlay, so the app underneath isn't sent to the background
+     * (Instagram can drop out of Reels when that happens).
+     */
+    private fun showFeaturePause(feature: ShortFormFeature, attempts: Int, timesUp: Boolean) {
+        overlay.show(
+            coveredPackage = feature.packageName,
+            label = feature.label,
+            attempts = attempts,
+            timesUp = timesUp,
+            pauseSeconds = PauseRules.pauseSeconds(store.basePauseSeconds, store.progressivePause, attempts),
+            onLeave = { declineFeature(feature) },
+            onAllow = { minutes -> allowFeature(feature, minutes) },
+        )
+    }
+
+    private fun declineFeature(feature: ShortFormFeature) {
+        if (!overlay.isShowing) return
+        store.recordResisted(feature.key)
+        overlay.hide()
+        ejectFrom(feature.key)
+    }
+
+    private fun allowFeature(feature: ShortFormFeature, minutes: Int) {
+        if (!overlay.isShowing) return
+        store.allow(feature.key, System.currentTimeMillis() + minutes * 60_000L)
+        overlay.hide()
+        // Starts the timer for the "time's up" screen.
+        scanForFeature(force = true)
     }
 
     /**
@@ -212,6 +257,7 @@ class BlockerAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        if (::overlay.isInitialized) overlay.hide()
         if (instance === this) instance = null
         super.onDestroy()
     }
