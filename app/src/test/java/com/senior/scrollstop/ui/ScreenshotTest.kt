@@ -72,6 +72,18 @@ class ScreenshotTest {
     @Test @Config(qualifiers = "+notnight")
     fun pauseAppChoiceLight() = capturePause("pause-app-choice-light", Phase.Choice, "TikTok", isFeature = false)
 
+    @Test fun importDark() = capture("import-dark", night = true) {
+        Intent(context, ImportActivity::class.java)
+            .setAction(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_SUBJECT, "Pharmacology")
+            .putExtra(
+                Intent.EXTRA_TEXT,
+                "Aspirin drug class\tNSAID\nMetformin treats\tType 2 diabetes\n" +
+                    "Warfarin reversal agent\tVitamin K\nfree text line\nACE inhibitor suffix\t-pril\n",
+            )
+    }
+
     @Test @Config(qualifiers = "+night")
     fun pauseQuizDark() = capturePause("pause-quiz-dark", Phase.Quiz, "Instagram Reels", isFeature = true, quiz = sampleQuiz)
 

@@ -48,9 +48,16 @@ it was signed with a different key, so Android won't install over it.
   screen is paused while you decide.
 - **Breathing pause** before every guarded app (3–20 s, your choice).
 - **Or a quiz instead:** answer a multiple-choice question before you can carry on. Topics:
-  mental maths, world capitals, English vocabulary, science basics, or **your own cards**
-  (write question-and-answer pairs for anything you're learning). A wrong answer shows the right
-  one and asks another. Everything is built in, so it still needs no internet.
+  mental maths, world capitals, English vocabulary, science basics, or **your own decks** for
+  anything you're studying. A wrong answer shows the right one and asks another.
+- **Import decks** by pasting text, choosing a .txt/.csv file, or Share → ScrollStop from any app.
+  One card per line, `question<TAB>answer` or `question - answer`, so these all work:
+  - **Quizlet:** open a set → ⋯ → Export, copy, paste.
+  - **Anki:** File → Export → *Notes in Plain Text*.
+  - **Any chatbot:** "Make 40 flashcards about <topic>, one per line, as question - answer".
+
+  A preview shows how many cards were found and which lines were skipped before anything is
+  saved. ScrollStop still has no internet access: you bring the cards in.
 - **Harder each time**: optionally +2 s of breathing for every repeat open of the same thing that
   day (up to 30 s), or one more quiz question every 3 repeat opens (up to 3).
 - **Honest counter**: "You've tried to open Instagram 7 times today."
@@ -78,7 +85,8 @@ Layout Inspector, or with `adb shell uiautomator dump`.
 | Reels/Shorts pause drawn over the app; whole-app pause as its own screen | `ui/PauseOverlay.kt`, `ui/InterceptActivity.kt` |
 | Setup screen: permission, stats, settings, app picker | `ui/MainActivity.kt` |
 | Pure decision logic (unit tested) | `data/PauseRules.kt` |
-| Quiz questions: generated maths, bundled topics, your own cards | `data/Quiz.kt` |
+| Quiz questions: generated maths, bundled topics, your own decks | `data/Quiz.kt` |
+| Deck import: parsing pasted text, files and shares; saved decks | `data/DeckParser.kt`, `data/DeckStore.kt`, `ui/ImportActivity.kt` |
 | Persisted settings, allowances and daily counters | `data/BlockerStore.kt` |
 
 ## Build

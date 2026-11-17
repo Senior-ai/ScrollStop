@@ -13,8 +13,9 @@ with that access, how the code is kept to that, and how to check that an APK is 
 | **Screen content** | It never reads text. In every app it only learns *which app* is open. Inside Instagram and YouTube it also asks whether a view with a known Reels/Shorts player ID is visible, and gets a yes or no. |
 | **Actions** | Only after you choose "No" on Reels/Shorts, to get you out of the feed, and in this order until you're out: press **Back**; tap the app's own **Home tab** (Instagram's, found by its view ID); go to the phone's **home screen**. It never types, never taps anything else, and does nothing on its own initiative. |
 | **Drawing on screen** | The Reels/Shorts pause is drawn on top of Instagram/YouTube as an accessibility overlay, which only the enabled accessibility service can show (no "display over other apps" permission). It disappears when you choose, press Back, or leave the app. |
+| **Quiz decks** | Imported by you from pasted text, a file you pick (Android's file picker, no storage permission), or Share. Kept in app-private storage with the rest of the data. |
 | **Stored data** | Your settings, plus per-app counters that reset daily. Only on the phone; excluded from cloud backup and device transfer. |
-| **Exposed to other apps** | Only the launcher screen. The service and the pause screen can't be started by other apps. |
+| **Exposed to other apps** | The launcher screen, and the import screen as a Share target for text and text files (quiz decks). Shared content only fills a preview; nothing is saved until you tap Import. The service and the pause screens can't be started by other apps. |
 
 You can confirm this in the code. All accessibility handling lives in
 `app/src/main/java/com/senior/scrollstop/service/BlockerAccessibilityService.kt`.

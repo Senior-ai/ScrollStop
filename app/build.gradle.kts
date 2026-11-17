@@ -33,8 +33,8 @@ android {
         applicationId = "com.senior.scrollstop"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.7"
+        versionCode = 9
+        versionName = "1.8"
     }
 
     signingConfigs {
@@ -127,7 +127,7 @@ val checkPermissions by tasks.registering {
     inputs.file(manifest)
     doLast {
         val allowedPermissions = setOf("com.senior.scrollstop.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
-        val allowedExported = setOf("com.senior.scrollstop.ui.MainActivity")
+        val allowedExported = setOf("com.senior.scrollstop.ui.MainActivity", "com.senior.scrollstop.ui.ImportActivity")
         val ns = "http://schemas.android.com/apk/res/android"
         val doc = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
             .newDocumentBuilder().parse(manifest.get().asFile)

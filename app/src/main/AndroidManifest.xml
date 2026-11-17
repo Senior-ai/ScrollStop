@@ -46,6 +46,24 @@
             android:taskAffinity="com.senior.scrollstop.intercept"
             android:theme="@style/Theme.ScrollStop.Intercept" />
 
+        <!--
+            Share → ScrollStop for quiz decks. Shared text or files only fill a preview; nothing is
+            saved until the user taps Import. Allowlisted in checkPermissions.
+        -->
+        <activity
+            android:name=".ui.ImportActivity"
+            android:exported="true"
+            android:label="@string/import_label">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/csv" />
+                <data android:mimeType="text/comma-separated-values" />
+                <data android:mimeType="text/tab-separated-values" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".service.BlockerAccessibilityService"
             android:exported="false"

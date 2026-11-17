@@ -15,7 +15,7 @@ enum class QuizTopic(val key: String, val label: String, val description: String
     CAPITALS("capitals", "World capitals", "Which city is the capital of…"),
     VOCABULARY("vocabulary", "English vocabulary", "What does this word mean?"),
     SCIENCE("science", "Science basics", "Planets, cells, elements and more"),
-    MY_CARDS("my_cards", "My own cards", "Questions you write, for whatever you're learning");
+    MY_CARDS("my_cards", "My decks", "Your own questions, imported or written, for anything you study");
 
     companion object {
         fun byKey(key: String?): QuizTopic = entries.firstOrNull { it.key == key } ?: MATH

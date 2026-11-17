@@ -69,6 +69,7 @@ import com.senior.scrollstop.CrashLog
 import com.senior.scrollstop.data.AppInfo
 import com.senior.scrollstop.data.BlockerStore
 import com.senior.scrollstop.data.InstalledApps
+import com.senior.scrollstop.data.Deck
 import com.senior.scrollstop.data.MyCard
 import com.senior.scrollstop.data.PauseMode
 import com.senior.scrollstop.data.PauseRules
@@ -366,7 +367,7 @@ private fun PauseSettings(store: BlockerStore) {
                 store.quizTopic = option
             }
         }
-        if (topic == QuizTopic.MY_CARDS) MyCardsEditor(store)
+        if (topic == QuizTopic.MY_CARDS) DecksEditor(store)
     }
     Hairline()
 
@@ -402,60 +403,115 @@ private fun ChoiceRow(title: String, subtitle: String, selected: Boolean, onSele
     }
 }
 
-/** The user's own question-and-answer cards for the "My own cards" topic. */
+/** The user's quiz decks for the "My decks" topic: pick one, import more, or add a card by hand. */
 @Composable
-private fun MyCardsEditor(store: BlockerStore) {
-    var cards by remember { mutableStateOf(store.myCards) }
+private fun DecksEditor(store: BlockerStore) {
+    val context = LocalContext.current
+    var decks by remember { mutableStateOf(store.decks.decks) }
+    var selected by remember { mutableStateOf(store.decks.selectedDeck?.id) }
     var adding by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<Deck?>(null) }
 
-    Column(Modifier.padding(start = Gutter, end = Gutter, top = 8.dp, bottom = 8.dp)) {
-        if (cards.size < QuizBank.MIN_CARDS) {
+    fun refresh() {
+        decks = store.decks.decks
+        selected = store.decks.selectedDeck?.id
+    }
+    // Imports happen in their own screen; pick them up when we come back.
+    LifecycleResumeEffect(Unit) {
+        refresh()
+        onPauseOrDispose {}
+    }
+
+    val current = decks.firstOrNull { it.id == selected }
+    Column(Modifier.padding(start = Gutter - 12.dp, end = Gutter - 12.dp, top = 4.dp, bottom = 8.dp)) {
+        if (decks.isEmpty()) {
             Text(
-                "Add at least ${QuizBank.MIN_CARDS} cards so each question has wrong answers to choose from. " +
+                "No decks yet. Import one from Quizlet, Anki, a file or a chatbot, or add cards by hand.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+        }
+        decks.forEach { deck ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        store.decks.selectedDeckId = deck.id
+                        refresh()
+                    },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = deck.id == selected, onClick = {
+                    store.decks.selectedDeckId = deck.id
+                    refresh()
+                })
+                Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                    Text(deck.name, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        if (deck.cards.size == 1) "1 card" else "${deck.cards.size} cards",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = { deleting = deck }) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${deck.name}")
+                }
+            }
+        }
+        if (current != null && current.cards.map { it.answer.lowercase() }.toSet().size < QuizBank.MIN_CARDS) {
+            Text(
+                "“${current.name}” needs at least ${QuizBank.MIN_CARDS} different answers for a quiz. " +
                     "Until then you'll get mental maths.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             )
         }
-        cards.forEachIndexed { index, card ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(card.question, style = MaterialTheme.typography.bodyLarge)
-                    Text(card.answer, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-                }
-                IconButton(onClick = {
-                    cards = cards.filterIndexed { i, _ -> i != index }
-                    store.myCards = cards
-                }) { Icon(Icons.Filled.Delete, contentDescription = "Delete card") }
-            }
+        Row(Modifier.padding(start = 12.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(onClick = { context.startActivity(ImportActivity.intent(context)) }) { Text("Import a deck") }
+            OutlinedButton(
+                onClick = { adding = true },
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            ) { Text("Add a card", color = MaterialTheme.colorScheme.onSurface) }
         }
-        OutlinedButton(
-            onClick = { adding = true },
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            modifier = Modifier.padding(top = 4.dp),
-        ) { Text("Add a card", color = MaterialTheme.colorScheme.onSurface) }
     }
 
     if (adding) {
         AddCardDialog(
+            deckName = current?.name ?: "My cards",
             onDismiss = { adding = false },
             onAdd = { card ->
-                cards = cards + card
-                store.myCards = cards
+                store.decks.addCard(card)
+                refresh()
                 adding = false
             },
+        )
+    }
+    deleting?.let { deck ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("Delete “${deck.name}”?") },
+            text = { Text("Its ${deck.cards.size} cards will be removed from this phone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    store.decks.delete(deck.id)
+                    refresh()
+                    deleting = null
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
         )
     }
 }
 
 @Composable
-private fun AddCardDialog(onDismiss: () -> Unit, onAdd: (MyCard) -> Unit) {
+private fun AddCardDialog(deckName: String, onDismiss: () -> Unit, onAdd: (MyCard) -> Unit) {
     var question by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add a card") },
+        title = { Text("Add a card to “$deckName”") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(question, { question = it }, label = { Text("Question") }, placeholder = { Text("Hola") })

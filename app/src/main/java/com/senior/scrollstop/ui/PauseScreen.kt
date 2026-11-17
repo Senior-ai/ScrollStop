@@ -50,6 +50,7 @@ import com.senior.scrollstop.data.BlockerStore
 import com.senior.scrollstop.data.PauseMode
 import com.senior.scrollstop.data.PauseRules
 import com.senior.scrollstop.data.QuizBank
+import com.senior.scrollstop.data.QuizTopic
 import com.senior.scrollstop.data.QuizQuestion
 import kotlinx.coroutines.delay
 import kotlin.math.PI
@@ -354,7 +355,7 @@ private fun ordinal(n: Int): String {
 internal fun quizFor(store: BlockerStore, attempts: Int): QuizConfig? {
     if (store.pauseMode != PauseMode.QUIZ) return null
     val topic = store.quizTopic
-    val cards = store.myCards
+    val cards = if (topic == QuizTopic.MY_CARDS) store.decks.selectedDeck?.cards.orEmpty() else emptyList()
     var last: String? = null
     return QuizConfig(PauseRules.questionsRequired(store.progressivePause, attempts)) {
         // Avoid asking the same question twice in a row.
