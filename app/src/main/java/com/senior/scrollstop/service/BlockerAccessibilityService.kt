@@ -19,6 +19,7 @@ import com.senior.scrollstop.data.ShortFormFeature
 import com.senior.scrollstop.data.ShortFormFeatures
 import com.senior.scrollstop.ui.InterceptActivity
 import com.senior.scrollstop.ui.PauseOverlay
+import com.senior.scrollstop.ui.quizFor
 
 /**
  * Watches which app comes to the foreground. When it is a guarded app without an active
@@ -178,6 +179,7 @@ class BlockerAccessibilityService : AccessibilityService() {
             pauseSeconds = PauseRules.pauseSeconds(store.basePauseSeconds, store.progressivePause, attempts),
             onLeave = { declineFeature(feature) },
             onAllow = { minutes -> allowFeature(feature, minutes) },
+            quiz = quizFor(store, attempts),
         )
     }
 

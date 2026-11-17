@@ -27,6 +27,25 @@ class BlockerStore(context: Context) {
         get() = prefs.getBoolean(KEY_PROGRESSIVE, true)
         set(value) = prefs.edit().putBoolean(KEY_PROGRESSIVE, value).apply()
 
+    /** What the pause asks of you: breathe, or answer quiz questions. */
+    var pauseMode: PauseMode
+        get() = PauseMode.entries.firstOrNull { it.name == prefs.getString(KEY_MODE, null) } ?: PauseMode.BREATHE
+        set(value) = prefs.edit().putString(KEY_MODE, value.name).apply()
+
+    var quizTopic: QuizTopic
+        get() = QuizTopic.byKey(prefs.getString(KEY_TOPIC, null))
+        set(value) = prefs.edit().putString(KEY_TOPIC, value.key).apply()
+
+    /** The user's own quiz cards, stored one per line as "question<TAB>answer". */
+    var myCards: List<MyCard>
+        get() = prefs.getString(KEY_CARDS, "").orEmpty().lines()
+            .mapNotNull { line -> line.split('\t').takeIf { it.size == 2 }?.let { MyCard(it[0], it[1]) } }
+        set(value) = prefs.edit()
+            .putString(KEY_CARDS, value.joinToString("\n") { "${clean(it.question)}\t${clean(it.answer)}" })
+            .apply()
+
+    private fun clean(text: String) = text.replace('\t', ' ').replace('\n', ' ').trim()
+
     fun setGuarded(pkg: String, guarded: Boolean) {
         guardedPackages = if (guarded) guardedPackages + pkg else guardedPackages - pkg
     }
@@ -96,6 +115,9 @@ class BlockerStore(context: Context) {
         const val DEFAULT_PAUSE_SECONDS = 6
         private const val KEY_GUARDED = "guarded"
         private const val KEY_FEATURES = "features"
+        private const val KEY_MODE = "pause_mode"
+        private const val KEY_TOPIC = "quiz_topic"
+        private const val KEY_CARDS = "my_cards"
         private const val KEY_PAUSE = "pause_seconds"
         private const val KEY_PROGRESSIVE = "progressive"
         private const val KEY_DAY = "stats_day"

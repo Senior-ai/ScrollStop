@@ -57,6 +57,7 @@ class PauseOverlay(private val service: AccessibilityService) {
         pauseSeconds: Int,
         onLeave: () -> Unit,
         onAllow: (minutes: Int) -> Unit,
+        quiz: QuizConfig? = null,
     ) {
         hide()
         this.coveredPackage = coveredPackage
@@ -73,6 +74,7 @@ class PauseOverlay(private val service: AccessibilityService) {
                         pauseSeconds = pauseSeconds,
                         onLeave = onLeave,
                         onAllow = onAllow,
+                        quiz = quiz,
                     )
                 }
             }

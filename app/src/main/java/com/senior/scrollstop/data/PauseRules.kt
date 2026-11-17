@@ -8,6 +8,12 @@ object PauseRules {
     /** Extra seconds added for every repeat attempt today when progressive pauses are on. */
     const val PROGRESSIVE_STEP_SECONDS = 2
 
+    /** Most questions a quiz pause ever asks for. */
+    const val MAX_QUESTIONS = 3
+
+    /** Repeat opens of the same thing today before a progressive quiz asks one more question. */
+    const val OPENS_PER_EXTRA_QUESTION = 3
+
     /** Choices offered once the pause ends, in minutes. */
     val ALLOWANCE_MINUTES = listOf(1, 5, 15)
 
@@ -28,4 +34,17 @@ object PauseRules {
         val extra = (attemptsToday - 1).coerceAtLeast(0) * PROGRESSIVE_STEP_SECONDS
         return (base + extra).coerceAtMost(MAX_PAUSE_SECONDS)
     }
+
+    /**
+     * How many right answers a quiz pause needs. With progressive pauses on, every few repeat
+     * opens today adds one, up to [MAX_QUESTIONS].
+     */
+    fun questionsRequired(progressive: Boolean, attemptsToday: Int): Int {
+        if (!progressive) return 1
+        val extra = (attemptsToday - 1).coerceAtLeast(0) / OPENS_PER_EXTRA_QUESTION
+        return (1 + extra).coerceAtMost(MAX_QUESTIONS)
+    }
 }
+
+/** What the pause asks of you before the choice. */
+enum class PauseMode { BREATHE, QUIZ }

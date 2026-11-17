@@ -19,7 +19,10 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -38,16 +41,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.senior.scrollstop.data.BlockerStore
+import com.senior.scrollstop.data.PauseMode
 import com.senior.scrollstop.data.PauseRules
+import com.senior.scrollstop.data.QuizBank
+import com.senior.scrollstop.data.QuizQuestion
 import kotlinx.coroutines.delay
 import kotlin.math.PI
+import kotlin.random.Random
 import kotlin.math.sin
 
-internal enum class Phase { TimesUp, Breathing, Choice }
+internal enum class Phase { TimesUp, Breathing, Quiz, Choice }
+
+/** Present when the pause is a quiz instead of breathing. */
+class QuizConfig(val required: Int, val nextQuestion: () -> QuizQuestion)
 
 /** One breath in or out, in milliseconds. */
 private const val BREATH_MS = 4_000
@@ -71,9 +83,11 @@ internal fun InterceptScreen(
     pauseSeconds: Int,
     onLeave: () -> Unit,
     onAllow: (minutes: Int) -> Unit,
+    quiz: QuizConfig? = null,
     startPhase: Phase? = null,
 ) {
-    var phase by remember { mutableStateOf(startPhase ?: if (timesUp) Phase.TimesUp else Phase.Breathing) }
+    val warmUp = if (quiz != null) Phase.Quiz else Phase.Breathing
+    var phase by remember { mutableStateOf(startPhase ?: if (timesUp) Phase.TimesUp else warmUp) }
     var remaining by remember { mutableIntStateOf(pauseSeconds) }
     var inhale by remember { mutableStateOf(false) }
     val motion = remember { ValueAnimator.areAnimatorsEnabled() }
@@ -117,8 +131,9 @@ internal fun InterceptScreen(
             )
             when (phase) {
                 Phase.Breathing -> Breathing(remaining, inhale)
+                Phase.Quiz -> if (quiz != null) Quiz(quiz, leaveText(label, isFeature), onLeave, onPassed = { phase = Phase.Choice })
                 Phase.Choice -> Choice(label, isFeature, onLeave, onAllow)
-                Phase.TimesUp -> TimesUp(label, isFeature, onLeave, onMore = { phase = Phase.Breathing })
+                Phase.TimesUp -> TimesUp(label, isFeature, onLeave, onMore = { phase = warmUp })
             }
             if (phase != Phase.Breathing) Spacer(Modifier.height(restHeight + 24.dp))
         }
@@ -144,7 +159,7 @@ private fun ColumnScope.Choice(label: String, isFeature: Boolean, onLeave: () ->
         style = MaterialTheme.typography.displayMedium,
     )
     Spacer(Modifier.height(28.dp))
-    PrimaryAction(if (isFeature) "Take me out of ${shortName(label)}" else "Don't open $label", onLeave)
+    PrimaryAction(leaveText(label, isFeature), onLeave)
     Spacer(Modifier.height(20.dp))
     Text(
         if (isFeature) "Or watch for" else "Or open it for",
@@ -232,6 +247,96 @@ private fun Tide(level: Float, motion: Boolean, modifier: Modifier) {
     }
 }
 
+@Composable
+private fun ColumnScope.Quiz(quiz: QuizConfig, leaveText: String, onLeave: () -> Unit, onPassed: () -> Unit) {
+    var correct by remember { mutableIntStateOf(0) }
+    var question by remember { mutableStateOf(quiz.nextQuestion()) }
+    var picked by remember { mutableStateOf<Int?>(null) }
+    val right = picked == question.answerIndex
+
+    // A right answer moves on by itself after a moment; a wrong one waits for "Next question".
+    LaunchedEffect(question, picked) {
+        if (picked == null || !right) return@LaunchedEffect
+        delay(700)
+        correct++
+        if (correct >= quiz.required) {
+            onPassed()
+        } else {
+            question = quiz.nextQuestion()
+            picked = null
+        }
+    }
+
+    Spacer(Modifier.weight(1f))
+    if (quiz.required > 1) {
+        Text(
+            "Question ${correct + 1} of ${quiz.required}",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(6.dp))
+    }
+    Text(question.prompt, style = MaterialTheme.typography.headlineMedium)
+    Spacer(Modifier.height(20.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        question.options.forEachIndexed { index, option ->
+            AnswerButton(
+                text = option,
+                state = when {
+                    picked == null -> AnswerState.Open
+                    index == question.answerIndex -> AnswerState.Right
+                    index == picked -> AnswerState.Wrong
+                    else -> AnswerState.Idle
+                },
+                onClick = { if (picked == null) picked = index },
+            )
+        }
+    }
+    if (picked != null && !right) {
+        Row(Modifier.padding(top = 14.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(
+                "Not quite. Try another one.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Button(onClick = {
+                question = quiz.nextQuestion()
+                picked = null
+            }) { Text("Next question") }
+        }
+    }
+    TextButton(onClick = onLeave, modifier = Modifier.padding(top = 12.dp)) {
+        Text(leaveText, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+private enum class AnswerState { Open, Idle, Right, Wrong }
+
+@Composable
+private fun AnswerButton(text: String, state: AnswerState, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val (container, content, border) = when (state) {
+        AnswerState.Right -> Triple(colors.primary, colors.onPrimary, colors.primary)
+        AnswerState.Wrong -> Triple(Color.Transparent, colors.error, colors.error)
+        AnswerState.Idle -> Triple(Color.Transparent, colors.onSurfaceVariant, colors.outlineVariant)
+        AnswerState.Open -> Triple(colors.surfaceContainer, colors.onSurface, colors.outlineVariant)
+    }
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        shape = RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, border),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = container, contentColor = content),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+private fun leaveText(label: String, isFeature: Boolean) =
+    if (isFeature) "Take me out of ${shortName(label)}" else "Don't open $label"
+
 /** "Instagram Reels" → "Reels". */
 private fun shortName(label: String) = label.substringAfterLast(' ')
 
@@ -243,4 +348,19 @@ private fun timesToday(attempts: Int): String = when {
 private fun ordinal(n: Int): String {
     val suffix = if (n % 100 in 11..13) "th" else when (n % 10) { 1 -> "st"; 2 -> "nd"; 3 -> "rd"; else -> "th" }
     return "$n$suffix"
+}
+
+/** The quiz for this pause from the user's settings, or null when they chose to breathe. */
+internal fun quizFor(store: BlockerStore, attempts: Int): QuizConfig? {
+    if (store.pauseMode != PauseMode.QUIZ) return null
+    val topic = store.quizTopic
+    val cards = store.myCards
+    var last: String? = null
+    return QuizConfig(PauseRules.questionsRequired(store.progressivePause, attempts)) {
+        // Avoid asking the same question twice in a row.
+        var question = QuizBank.next(topic, Random.Default, cards)
+        repeat(5) { if (question.prompt == last) question = QuizBank.next(topic, Random.Default, cards) }
+        last = question.prompt
+        question
+    }
 }

@@ -30,13 +30,19 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -63,7 +69,11 @@ import com.senior.scrollstop.CrashLog
 import com.senior.scrollstop.data.AppInfo
 import com.senior.scrollstop.data.BlockerStore
 import com.senior.scrollstop.data.InstalledApps
+import com.senior.scrollstop.data.MyCard
+import com.senior.scrollstop.data.PauseMode
 import com.senior.scrollstop.data.PauseRules
+import com.senior.scrollstop.data.QuizBank
+import com.senior.scrollstop.data.QuizTopic
 import com.senior.scrollstop.data.ShortFormFeatures
 import com.senior.scrollstop.service.BlockerAccessibilityService
 import kotlinx.coroutines.Dispatchers
@@ -315,31 +325,151 @@ private fun SetupStep(number: Int, title: String, detail: String, action: String
 
 @Composable
 private fun PauseSettings(store: BlockerStore) {
+    var mode by remember { mutableStateOf(store.pauseMode) }
+    var topic by remember { mutableStateOf(store.quizTopic) }
     var pause by remember { mutableFloatStateOf(store.basePauseSeconds.toFloat()) }
     var progressive by remember { mutableStateOf(store.progressivePause) }
-    Column(Modifier.padding(start = Gutter, end = Gutter, top = 12.dp)) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text("Breathe for", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Text("${pause.toInt()} s", style = MaterialTheme.typography.headlineSmall)
-        }
-        Slider(
-            value = pause,
-            onValueChange = { pause = it },
-            onValueChangeFinished = { store.basePauseSeconds = pause.toInt() },
-            valueRange = PauseRules.MIN_PAUSE_SECONDS.toFloat()..20f,
-            steps = 20 - PauseRules.MIN_PAUSE_SECONDS - 1,
-        )
+
+    ChoiceRow("Breathe", "A slow countdown while the tide rises and falls", mode == PauseMode.BREATHE) {
+        mode = PauseMode.BREATHE
+        store.pauseMode = mode
+    }
+    ChoiceRow("Quiz", "Answer a question before you can carry on", mode == PauseMode.QUIZ) {
+        mode = PauseMode.QUIZ
+        store.pauseMode = mode
     }
     Hairline()
+
+    if (mode == PauseMode.BREATHE) {
+        Column(Modifier.padding(start = Gutter, end = Gutter, top = 12.dp)) {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("Breathe for", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text("${pause.toInt()} s", style = MaterialTheme.typography.headlineSmall)
+            }
+            Slider(
+                value = pause,
+                onValueChange = { pause = it },
+                onValueChangeFinished = { store.basePauseSeconds = pause.toInt() },
+                valueRange = PauseRules.MIN_PAUSE_SECONDS.toFloat()..20f,
+                steps = 20 - PauseRules.MIN_PAUSE_SECONDS - 1,
+            )
+        }
+    } else {
+        Text(
+            "Quiz topic",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(start = Gutter, end = Gutter, top = 16.dp, bottom = 4.dp),
+        )
+        QuizTopic.entries.forEach { option ->
+            ChoiceRow(option.label, option.description, topic == option) {
+                topic = option
+                store.quizTopic = option
+            }
+        }
+        if (topic == QuizTopic.MY_CARDS) MyCardsEditor(store)
+    }
+    Hairline()
+
     SwitchRow(
-        title = "Longer each time",
-        subtitle = "${PauseRules.PROGRESSIVE_STEP_SECONDS} more seconds each time you reopen the same thing today",
+        title = "Harder each time",
+        subtitle = if (mode == PauseMode.BREATHE) {
+            "${PauseRules.PROGRESSIVE_STEP_SECONDS} more seconds each time you reopen the same thing today"
+        } else {
+            "One more question every ${PauseRules.OPENS_PER_EXTRA_QUESTION} reopens today, up to ${PauseRules.MAX_QUESTIONS}"
+        },
         checked = progressive,
         divider = false,
     ) {
         progressive = it
         store.progressivePause = it
     }
+}
+
+@Composable
+private fun ChoiceRow(title: String, subtitle: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(horizontal = Gutter - 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Column(Modifier.padding(start = 4.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** The user's own question-and-answer cards for the "My own cards" topic. */
+@Composable
+private fun MyCardsEditor(store: BlockerStore) {
+    var cards by remember { mutableStateOf(store.myCards) }
+    var adding by remember { mutableStateOf(false) }
+
+    Column(Modifier.padding(start = Gutter, end = Gutter, top = 8.dp, bottom = 8.dp)) {
+        if (cards.size < QuizBank.MIN_CARDS) {
+            Text(
+                "Add at least ${QuizBank.MIN_CARDS} cards so each question has wrong answers to choose from. " +
+                    "Until then you'll get mental maths.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+        cards.forEachIndexed { index, card ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(card.question, style = MaterialTheme.typography.bodyLarge)
+                    Text(card.answer, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = {
+                    cards = cards.filterIndexed { i, _ -> i != index }
+                    store.myCards = cards
+                }) { Icon(Icons.Filled.Delete, contentDescription = "Delete card") }
+            }
+        }
+        OutlinedButton(
+            onClick = { adding = true },
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            modifier = Modifier.padding(top = 4.dp),
+        ) { Text("Add a card", color = MaterialTheme.colorScheme.onSurface) }
+    }
+
+    if (adding) {
+        AddCardDialog(
+            onDismiss = { adding = false },
+            onAdd = { card ->
+                cards = cards + card
+                store.myCards = cards
+                adding = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun AddCardDialog(onDismiss: () -> Unit, onAdd: (MyCard) -> Unit) {
+    var question by remember { mutableStateOf("") }
+    var answer by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add a card") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(question, { question = it }, label = { Text("Question") }, placeholder = { Text("Hola") })
+                OutlinedTextField(answer, { answer = it }, label = { Text("Answer") }, placeholder = { Text("Hello") }, singleLine = true)
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onAdd(MyCard(question.trim(), answer.trim())) },
+                enabled = question.isNotBlank() && answer.isNotBlank(),
+            ) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

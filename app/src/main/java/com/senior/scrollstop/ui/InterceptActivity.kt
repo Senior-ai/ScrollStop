@@ -13,6 +13,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.senior.scrollstop.data.BlockerStore
 import com.senior.scrollstop.data.InstalledApps
@@ -61,6 +62,7 @@ class InterceptActivity : ComponentActivity() {
             ScrollStopTheme {
                 request?.let { r ->
                     key(r.nonce) {
+                        val quiz = remember { quizFor(store, r.attempts) }
                         InterceptScreen(
                             label = r.label,
                             isFeature = r.isFeature,
@@ -69,6 +71,7 @@ class InterceptActivity : ComponentActivity() {
                             pauseSeconds = PauseRules.pauseSeconds(store.basePauseSeconds, store.progressivePause, r.attempts),
                             onLeave = { leave(r) },
                             onAllow = { minutes -> allow(r, minutes) },
+                            quiz = quiz,
                         )
                     }
                 }

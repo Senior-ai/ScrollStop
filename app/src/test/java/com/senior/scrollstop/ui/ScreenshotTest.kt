@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import com.senior.scrollstop.data.QuizQuestion
 import java.io.File
 import org.junit.Before
 import org.junit.Rule
@@ -71,7 +72,24 @@ class ScreenshotTest {
     @Test @Config(qualifiers = "+notnight")
     fun pauseAppChoiceLight() = capturePause("pause-app-choice-light", Phase.Choice, "TikTok", isFeature = false)
 
-    private fun capturePause(name: String, phase: Phase, label: String, isFeature: Boolean, atMs: Long = 1_500) {
+    @Test @Config(qualifiers = "+night")
+    fun pauseQuizDark() = capturePause("pause-quiz-dark", Phase.Quiz, "Instagram Reels", isFeature = true, quiz = sampleQuiz)
+
+    @Test @Config(qualifiers = "+notnight")
+    fun pauseQuizLight() = capturePause("pause-quiz-light", Phase.Quiz, "Instagram Reels", isFeature = true, quiz = sampleQuiz)
+
+    private val sampleQuiz = QuizConfig(required = 2) {
+        QuizQuestion("What's the capital of Portugal?", listOf("Madrid", "Lisbon", "Porto", "Rome"), answerIndex = 1)
+    }
+
+    private fun capturePause(
+        name: String,
+        phase: Phase,
+        label: String,
+        isFeature: Boolean,
+        atMs: Long = 1_500,
+        quiz: QuizConfig? = null,
+    ) {
         // The tide drifts forever, so drive the clock by hand instead of waiting for idle.
         compose.mainClock.autoAdvance = false
         compose.setContent {
@@ -84,6 +102,7 @@ class ScreenshotTest {
                     pauseSeconds = 12,
                     onLeave = {},
                     onAllow = {},
+                    quiz = quiz,
                     startPhase = phase,
                 )
             }

@@ -9,6 +9,7 @@ It can also guard whole apps (TikTok, Reddit, …) with the same pause.
 
 <p>
   <img src="docs/screenshots/pause-breathing-dark.png" width="230" alt="The breathing pause: a countdown over a rising tide">
+  <img src="docs/screenshots/pause-quiz-dark.png" width="230" alt="Quiz mode: What's the capital of Portugal? with four answers">
   <img src="docs/screenshots/pause-choice-dark.png" width="230" alt="The choice: Still want to scroll? with Take me out of Reels">
   <img src="docs/screenshots/main-dark.png" width="230" alt="The main screen with setup steps and Reels and Shorts switches">
 </p>
@@ -46,7 +47,12 @@ it was signed with a different key, so Android won't install over it.
   phone's home screen if you're somehow still in it. The video behind the pause
   screen is paused while you decide.
 - **Breathing pause** before every guarded app (3–20 s, your choice).
-- **Gets longer each time**: optionally +2 s for every repeat open of the same app that day (capped at 30 s).
+- **Or a quiz instead:** answer a multiple-choice question before you can carry on. Topics:
+  mental maths, world capitals, English vocabulary, science basics, or **your own cards**
+  (write question-and-answer pairs for anything you're learning). A wrong answer shows the right
+  one and asks another. Everything is built in, so it still needs no internet.
+- **Harder each time**: optionally +2 s of breathing for every repeat open of the same thing that
+  day (up to 30 s), or one more quiz question every 3 repeat opens (up to 3).
 - **Honest counter**: "You've tried to open Instagram 7 times today."
 - **Time-boxed access**: if you do go in, you pick 1, 5 or 15 minutes.
 - **Time's up**: when that time runs out while you're still in the app, ScrollStop steps in again.
@@ -72,6 +78,7 @@ Layout Inspector, or with `adb shell uiautomator dump`.
 | Reels/Shorts pause drawn over the app; whole-app pause as its own screen | `ui/PauseOverlay.kt`, `ui/InterceptActivity.kt` |
 | Setup screen: permission, stats, settings, app picker | `ui/MainActivity.kt` |
 | Pure decision logic (unit tested) | `data/PauseRules.kt` |
+| Quiz questions: generated maths, bundled topics, your own cards | `data/Quiz.kt` |
 | Persisted settings, allowances and daily counters | `data/BlockerStore.kt` |
 
 ## Build
