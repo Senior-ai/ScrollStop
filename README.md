@@ -2,10 +2,42 @@
 
 A small Android app in the spirit of *one sec*, focused on the worst doom-scroll traps:
 **Instagram Reels** and **YouTube Shorts**. When you start one, ScrollStop shows a short breathing
-pause and asks whether you really want to scroll. Say no and it backs you out of the feed,
-and you keep using the rest of the app (DMs, search, subscriptions) as normal.
+pause and asks whether you really want to scroll. Say no and it takes you out of the feed, and
+you keep using the rest of the app (messages, search, subscriptions) as normal.
 
 It can also guard whole apps (TikTok, Reddit, …) with the same pause.
+
+<p>
+  <img src="docs/screenshots/pause-breathing-dark.png" width="230" alt="The breathing pause: a countdown over a rising tide">
+  <img src="docs/screenshots/pause-choice-dark.png" width="230" alt="The choice: Still want to scroll? with Take me out of Reels">
+  <img src="docs/screenshots/main-dark.png" width="230" alt="The main screen with setup steps and Reels and Shorts switches">
+</p>
+
+## Install
+
+### [Download ScrollStop.apk](https://github.com/Senior-ai/ScrollStop/releases/latest/download/ScrollStop.apk)
+
+That link always gives you the newest version. Reading this on a computer? Scan the code with
+your phone's camera:
+
+<img src="docs/install-qr.svg" width="160" alt="QR code for the ScrollStop download link">
+
+1. **Open the downloaded file.** If your browser asks, allow it to install unknown apps.
+2. **If Android blocks the install** ("App blocked to protect your device"), it's because
+   ScrollStop uses Accessibility and doesn't come from the Play Store. Turn these off just while
+   you install, then turn them back on (ScrollStop stays installed):
+   - Play Store → your profile picture → Play Protect → ⚙ → *Scan apps with Play Protect*
+   - Samsung only: Settings → Security and privacy → *Auto Blocker*
+3. **Open ScrollStop and follow its two setup steps.** First *Allow restricted settings*
+   (App info → ⋮ → Allow restricted settings), then turn on *ScrollStop pause* in Accessibility.
+   These apply to ScrollStop only.
+
+**Updating:** tap the same download link and install over the old version. Your settings stay.
+If you have a test build that was sent to you directly (1.0 to 1.5), uninstall it once first:
+it was signed with a different key, so Android won't install over it.
+
+**Is my download genuine?** Every release lists its checksum and signing certificate. See
+[SECURITY.md](SECURITY.md#checking-an-apk-before-installing).
 
 ## What it does
 
@@ -36,7 +68,8 @@ Layout Inspector, or with `adb shell uiautomator dump`.
 |---|---|
 | Detects the foreground app, and the Reels/Shorts player inside Instagram/YouTube | `service/BlockerAccessibilityService.kt` |
 | Which view IDs mark the Reels and Shorts players | `data/ShortFormFeatures.kt` |
-| Pause, choice and time's-up screens (Jetpack Compose) | `ui/InterceptActivity.kt` |
+| Pause, choice and time's-up screens (Jetpack Compose) | `ui/PauseScreen.kt` |
+| Reels/Shorts pause drawn over the app; whole-app pause as its own screen | `ui/PauseOverlay.kt`, `ui/InterceptActivity.kt` |
 | Setup screen: permission, stats, settings, app picker | `ui/MainActivity.kt` |
 | Pure decision logic (unit tested) | `data/PauseRules.kt` |
 | Persisted settings, allowances and daily counters | `data/BlockerStore.kt` |
@@ -50,9 +83,13 @@ Requires JDK 17+ and the Android SDK (platform 35).
 ./gradlew assembleRelease       # → app/build/outputs/apk/release/app-release.apk
 ```
 
-Without a signing key, release builds use the debug key, which is fine for your own phone.
-To publish builds for others, set up your own key and use GitHub releases (see
-[SECURITY.md](SECURITY.md)).
+Without a signing key, local release builds use the debug key, which is fine for testing on
+your own phone.
+
+**Releasing:** bump `versionName` (and `versionCode`) in `app/build.gradle.kts` and push to
+`main`. GitHub Actions builds, tests and signs the APK and publishes it as a release, which the
+download link above then serves. Signing needs the repository secrets described in
+[SECURITY.md](SECURITY.md#your-signing-key).
 
 ## Safety
 
@@ -61,22 +98,12 @@ screen, and the only things it does are the steps that take you out of a feed af
 The build fails if a permission is ever added. See
 [SECURITY.md](SECURITY.md) for the full list and how to check a downloaded APK.
 
-## Install and set up
+## Tips
 
-1. Install the APK. Play Protect blocks any sideloaded app that asks for Accessibility,
-   however safe it is ("This app can request access to sensitive data…"). Either:
-   - **Recommended:** install from a computer with `adb install ScrollStop.apk`
-     (turn on Developer options → USB debugging first), or
-   - briefly turn off Play Store → profile → Play Protect → ⚙ → *Scan apps with Play Protect*,
-     install, then turn it back on.
-2. Open ScrollStop and tap **Open Accessibility settings** → *ScrollStop pause* → turn it on.
-   - On Android 13+ the switch may be greyed out for sideloaded apps. Go to
-     **Settings → Apps → ScrollStop → ⋮ → Allow restricted settings**, then try again.
-3. Reels and Shorts are guarded straight away. Optionally switch on whole apps to guard too.
-   - Updating from an older version? Turn the accessibility service off and on once, so
-     Android picks up the new permission to look for the Reels/Shorts player.
-4. Optional: some phones (Xiaomi, Samsung, Huawei…) kill background services aggressively.
-   If the pause stops appearing, set ScrollStop's battery usage to **Unrestricted**.
+- Some phones (Samsung, Xiaomi, Huawei…) stop background services aggressively. If the pause
+  stops appearing, set ScrollStop's battery usage to **Unrestricted**.
+- Prefer a computer? `adb install -r ScrollStop.apk` installs or updates without the Play
+  Protect prompt (turn on Developer options → USB debugging first).
 
 ## Ideas for later
 

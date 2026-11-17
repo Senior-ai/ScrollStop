@@ -1,10 +1,14 @@
 name: Build
 
+# Every push is built and tested. When the app's versionName (app/build.gradle.kts) changes on
+# main, the signed APK is also published as a GitHub release, so
+# https://github.com/<owner>/<repo>/releases/latest/download/ScrollStop.apk always serves the
+# newest version.
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,6 +16,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,15 +30,30 @@ jobs:
       # Also verifies the Gradle wrapper jar against Gradle's published checksums.
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Is this version released yet?
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HAS_KEY: ${{ secrets.SCROLLSTOP_KEYSTORE_BASE64 != '' }}
+          ON_MAIN: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+        run: |
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          RELEASE=false
+          if [ "$ON_MAIN" = "true" ] && ! gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if [ "$HAS_KEY" = "true" ]; then
+              RELEASE=true
+            else
+              echo "::warning::Version $VERSION isn't released, but the signing key secrets are missing (see SECURITY.md)."
+            fi
+          fi
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+
       - name: Restore release signing key
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.version.outputs.release == 'true'
         env:
           KEYSTORE_BASE64: ${{ secrets.SCROLLSTOP_KEYSTORE_BASE64 }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::Add the SCROLLSTOP_KEYSTORE_BASE64 secret before tagging a release (see SECURITY.md)."
-            exit 1
-          fi
           echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
           echo "SCROLLSTOP_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
 
@@ -44,8 +66,7 @@ jobs:
 
       - name: Checksum and signing certificate
         run: |
-          APK=app/build/outputs/apk/release/app-release.apk
-          cp "$APK" ScrollStop.apk
+          cp app/build/outputs/apk/release/app-release.apk ScrollStop.apk
           sha256sum ScrollStop.apk | tee ScrollStop.apk.sha256
           "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs ScrollStop.apk | tee signing-certificate.txt
 
@@ -58,8 +79,8 @@ jobs:
             signing-certificate.txt
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
+    if: needs.build.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,6 +91,16 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" ScrollStop.apk ScrollStop.apk.sha256 signing-certificate.txt \
-            --repo "$GITHUB_REPOSITORY" --title "ScrollStop $GITHUB_REF_NAME" --generate-notes
+          cat > notes.md <<NOTES
+          **Install:** open this page on your phone and tap **ScrollStop.apk** below. Already installed? Install it over the old one; your settings stay.
+
+          Signing certificate (the same for every release):
+          \`\`\`
+          $(cat signing-certificate.txt)
+          \`\`\`
+          NOTES
+          gh release create "v$VERSION" ScrollStop.apk ScrollStop.apk.sha256 signing-certificate.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "ScrollStop $VERSION" \
+            --notes-file notes.md --generate-notes --latest

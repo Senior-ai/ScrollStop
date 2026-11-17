@@ -25,15 +25,21 @@ You can confirm this in the code. All accessibility handling lives in
   manifest gains any permission or exported component that isn't on a short allowlist.
 - The Gradle wrapper download is pinned by SHA-256, and CI verifies the wrapper jar.
 - Dependencies are pinned to exact versions.
-- Release APKs are built by GitHub Actions from the tagged source, not on a personal machine.
+- Release APKs are built by GitHub Actions from the public source on `main`. The first public
+  release, 1.6, was built from the same commit in a development environment, because the
+  repository secrets weren't set up yet; every later release comes from Actions.
 
 ## Your signing key
 
 An Android app's signing key is its identity. Android only installs an update over an
 existing app if both are signed with the same key, so whoever holds the key controls updates.
 
-Create one once, on your own computer, and back it up somewhere safe (e.g. a password manager).
-**Never commit it.** `.gitignore` already excludes `*.jks` and `keystore.properties`.
+ScrollStop's key is `scrollstop-release.jks` (alias `scrollstop`; fingerprint below). Keep it
+and its password backed up somewhere safe, such as a password manager. **Never commit it.**
+`.gitignore` already excludes `*.jks` and `keystore.properties`.
+
+If the key is ever lost or leaked, make a new one as below. Everyone then has to uninstall
+once, because Android won't update an app across keys.
 
 ```bash
 keytool -genkeypair -v -keystore scrollstop-release.jks -alias scrollstop \
@@ -58,14 +64,24 @@ GitHub releases: add these repository secrets (Settings → Secrets and variable
 | `SCROLLSTOP_KEY_ALIAS` | `scrollstop` |
 | `SCROLLSTOP_KEY_PASSWORD` | key password |
 
-Then publish a release by pushing a tag: `git tag v1.1 && git push origin v1.1`.
+Then publish a release by raising `versionName` (and `versionCode`) in `app/build.gradle.kts`
+and pushing to `main`. Actions notices the new version, signs the APK with this key and
+publishes it as release `v<versionName>`. Without the secrets it still builds and tests, and
+warns that it skipped the release.
 
 Builds without a key fall back to the debug key so you can still test on your own phone.
 Don't share those builds.
 
 ## Checking an APK before installing
 
-Only install ScrollStop from this repository's **Releases** page. Each release includes:
+Only install ScrollStop from this repository's **Releases** page (the download link in the
+README points there). Every release is signed with the same certificate:
+
+```
+SHA-256: 6E:DF:1C:C5:8F:78:C3:39:65:73:83:69:3C:53:13:E3:0B:26:0B:B0:64:F9:5D:2E:58:C1:47:FD:A7:D8:E2:D3
+```
+
+Each release includes:
 
 - `ScrollStop.apk.sha256`: compare it with `sha256sum ScrollStop.apk` (or `certutil -hashfile ScrollStop.apk SHA256` on Windows).
 - `signing-certificate.txt`: the certificate fingerprint. It must be the same in every release.
