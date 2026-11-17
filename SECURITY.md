@@ -25,9 +25,8 @@ You can confirm this in the code. All accessibility handling lives in
   manifest gains any permission or exported component that isn't on a short allowlist.
 - The Gradle wrapper download is pinned by SHA-256, and CI verifies the wrapper jar.
 - Dependencies are pinned to exact versions.
-- Release APKs are built by GitHub Actions from the public source on `main`. The first public
-  release, 1.6, was built from the same commit in a development environment, because the
-  repository secrets weren't set up yet; every later release comes from Actions.
+- Release APKs are built and signed by GitHub Actions from the public source on `main`, never
+  on a personal machine.
 
 ## Your signing key
 
